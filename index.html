@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>夢単 Memorizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .question-type {
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .question-number {
+            color: #666;
+            font-weight: bold;
+        }
+
+        .word-number {
+            background: #764ba2;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+
+        .question-content {
+            margin-bottom: 25px;
+        }
+
+        .question-text {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .input-area {
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .choice-btn {
+            background: white;
+            border: 2px solid #e0e0e0;
+            padding: 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            text-align: left;
+        }
+
+        .choice-btn:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+
+        .choice-btn.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-submit {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-submit:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-next {
+            background: #764ba2;
+            color: white;
+        }
+
+        .btn-next:hover {
+            background: #5f3a82;
+            transform: translateY(-2px);
+        }
+
+        .feedback {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+        }
+
+        .feedback.correct {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+            display: block;
+        }
+
+        .feedback.incorrect {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+            display: block;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>夢単 Memorizer</h1>
+        
+        <div id="questionArea">
+            <div class="question-header">
+                <span class="question-type" id="questionType">日→英</span>
+                <span class="question-number">問題 <span id="currentQuestion">1</span>/<span id="totalQuestions">10</span></span>
+            </div>
+
+            <div class="word-number">No. <span id="wordNumber">1</span></div>
+
+            <div class="question-content">
+                <div class="question-text" id="questionText">問題文</div>
+
+                <div class="input-area hidden" id="inputArea">
+                    <input type="text" id="answerInput" placeholder="答えを入力してください">
+                </div>
+
+                <div class="choices hidden" id="choicesArea">
+                    <button class="choice-btn" data-choice="0"></button>
+                    <button class="choice-btn" data-choice="1"></button>
+                    <button class="choice-btn" data-choice="2"></button>
+                    <button class="choice-btn" data-choice="3"></button>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-submit" id="submitBtn">回答する</button>
+                <button class="btn-next hidden" id="nextBtn">次へ</button>
+            </div>
+
+            <div class="feedback" id="feedback"></div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">正解</div>
+                <div class="stat-value" id="correctCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">不正解</div>
+                <div class="stat-value" id="incorrectCount">0</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 単語データ（単語ナンバーと日英の単語を結びつけた配列）
+        const wordData = [
+            { number: 1, japanese: "重要な", english: "important" },
+            { number: 2, japanese: "異なる", english: "different" },
+            { number: 3, japanese: "可能な", english: "possible" },
+            { number: 4, japanese: "必要な", english: "necessary" },
+            { number: 5, japanese: "特別な", english: "special" },
+            { number: 6, japanese: "社会の", english: "social" },
+            { number: 7, japanese: "自然な", english: "natural" },
+            { number: 8, japanese: "一般的な", english: "general" },
+            { number: 9, japanese: "個人的な", english: "personal" },
+            { number: 10, japanese: "政治的な", english: "political" },
+            { number: 11, japanese: "経済的な", english: "economic" },
+            { number: 12, japanese: "物理的な", english: "physical" },
+            { number: 13, japanese: "文化的な", english: "cultural" },
+            { number: 14, japanese: "歴史的な", english: "historical" },
+            { number: 15, japanese: "科学的な", english: "scientific" }
+        ];
+
+        let currentQuestionIndex = 0;
+        let correctCount = 0;
+        let incorrectCount = 0;
+        let questions = [];
+        let currentAnswer = null;
+        let selectedChoice = null;
+
+        // 問題を生成する
+        function generateQuestions() {
+            questions = [];
+            
+            // 日→英のスペル問題を生成
+            wordData.forEach(word => {
+                questions.push({
+                    type: 'ja-en',
+                    word: word,
+                    question: word.japanese,
+                    answer: word.english
+                });
+            });
+
+            // 英→日の選択問題を生成
+            wordData.forEach(word => {
+                const choices = generateChoices(word);
+                questions.push({
+                    type: 'en-ja',
+                    word: word,
+                    question: word.english,
+                    answer: word.japanese,
+                    choices: choices
+                });
+            });
+
+            // 問題をシャッフル
+            shuffleArray(questions);
+        }
+
+        // 選択肢を生成する（正解を含む4つの選択肢）
+        function generateChoices(correctWord) {
+            const choices = [correctWord.japanese];
+            const otherWords = wordData.filter(w => w.number !== correctWord.number);
+            
+            // ランダムに3つの不正解を選ぶ
+            const shuffled = [...otherWords].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < 3 && i < shuffled.length; i++) {
+                choices.push(shuffled[i].japanese);
+            }
+
+            // 選択肢をシャッフル
+            shuffleArray(choices);
+            return choices;
+        }
+
+        // 配列をシャッフルする
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // 問題を表示する
+        function displayQuestion() {
+            if (currentQuestionIndex >= questions.length) {
+                showResult();
+                return;
+            }
+
+            const question = questions[currentQuestionIndex];
+            currentAnswer = question.answer;
+            selectedChoice = null;
+
+            // 問題ヘッダーを更新
+            document.getElementById('questionType').textContent = 
+                question.type === 'ja-en' ? '日→英 (スペル)' : '英→日 (選択)';
+            document.getElementById('currentQuestion').textContent = currentQuestionIndex + 1;
+            document.getElementById('totalQuestions').textContent = questions.length;
+            document.getElementById('wordNumber').textContent = question.word.number;
+
+            // 問題文を表示
+            document.getElementById('questionText').textContent = question.question;
+
+            // フィードバックをクリア
+            const feedback = document.getElementById('feedback');
+            feedback.className = 'feedback';
+            feedback.style.display = 'none';
+
+            // ボタンの表示を調整
+            document.getElementById('submitBtn').classList.remove('hidden');
+            document.getElementById('nextBtn').classList.add('hidden');
+
+            // 問題タイプに応じて入力エリアまたは選択肢を表示
+            if (question.type === 'ja-en') {
+                // 日→英：テキスト入力
+                document.getElementById('inputArea').classList.remove('hidden');
+                document.getElementById('choicesArea').classList.add('hidden');
+                document.getElementById('answerInput').value = '';
+                document.getElementById('answerInput').focus();
+            } else {
+                // 英→日：選択肢
+                document.getElementById('inputArea').classList.add('hidden');
+                document.getElementById('choicesArea').classList.remove('hidden');
+                
+                const choiceBtns = document.querySelectorAll('.choice-btn');
+                choiceBtns.forEach((btn, index) => {
+                    btn.textContent = question.choices[index];
+                    btn.classList.remove('selected');
+                    btn.onclick = () => selectChoice(index);
+                });
+            }
+        }
+
+        // 選択肢を選ぶ
+        function selectChoice(index) {
+            selectedChoice = index;
+            const choiceBtns = document.querySelectorAll('.choice-btn');
+            choiceBtns.forEach((btn, i) => {
+                if (i === index) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+
+        // 回答をチェックする
+        function checkAnswer() {
+            const question = questions[currentQuestionIndex];
+            let userAnswer = '';
+            let isCorrect = false;
+
+            if (question.type === 'ja-en') {
+                userAnswer = document.getElementById('answerInput').value.trim().toLowerCase();
+                isCorrect = userAnswer === currentAnswer.toLowerCase();
+            } else {
+                if (selectedChoice === null) {
+                    alert('選択肢を選んでください');
+                    return;
+                }
+                userAnswer = question.choices[selectedChoice];
+                isCorrect = userAnswer === currentAnswer;
+            }
+
+            // フィードバックを表示
+            const feedback = document.getElementById('feedback');
+            if (isCorrect) {
+                feedback.textContent = '正解！';
+                feedback.className = 'feedback correct';
+                correctCount++;
+                document.getElementById('correctCount').textContent = correctCount;
+            } else {
+                feedback.textContent = `不正解... 正解は「${currentAnswer}」です`;
+                feedback.className = 'feedback incorrect';
+                incorrectCount++;
+                document.getElementById('incorrectCount').textContent = incorrectCount;
+            }
+
+            // ボタンの表示を切り替え
+            document.getElementById('submitBtn').classList.add('hidden');
+            document.getElementById('nextBtn').classList.remove('hidden');
+        }
+
+        // 次の問題へ
+        function nextQuestion() {
+            currentQuestionIndex++;
+            displayQuestion();
+        }
+
+        // 結果を表示
+        function showResult() {
+            const total = questions.length;
+            const percentage = Math.round((correctCount / total) * 100);
+            
+            document.getElementById('questionArea').innerHTML = `
+                <div style="text-align: center; padding: 40px 0;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">お疲れ様でした！</h2>
+                    <div style="font-size: 3em; font-weight: bold; color: #764ba2; margin: 20px 0;">
+                        ${percentage}%
+                    </div>
+                    <div style="font-size: 1.2em; color: #666; margin-bottom: 30px;">
+                        ${correctCount}/${total} 問正解
+                    </div>
+                    <button onclick="location.reload()" 
+                            style="background: #667eea; color: white; padding: 15px 40px; 
+                                   border: none; border-radius: 10px; font-size: 1.1em; 
+                                   font-weight: bold; cursor: pointer;">
+                        もう一度
+                    </button>
+                </div>
+            `;
+        }
+
+        // イベントリスナーを設定
+        document.getElementById('submitBtn').addEventListener('click', checkAnswer);
+        document.getElementById('nextBtn').addEventListener('click', nextQuestion);
+        document.getElementById('answerInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkAnswer();
+            }
+        });
+
+        // 初期化
+        generateQuestions();
+        displayQuestion();
+    </script>
+</body>
+</html>
