@@ -140,10 +140,7 @@
             border-radius:10px;
             transition:border-color .3s;
         }
-        input#answerInput:focus {
-            outline:none;
-            border-color:#667eea;
-        }
+        input#answerInput:focus { outline:none; border-color:#667eea; }
         .choices {
             display:flex;
             flex-direction:column;
@@ -174,12 +171,13 @@
             display:flex;
             gap:10px;
             margin-top:8px;
+            flex-wrap:wrap;
         }
         .button-group button {
             flex:1;
-            padding:15px;
-            font-size:1em;
-            font-weight:bold;
+            padding:13px 12px;
+            font-size:.95em;
+            font-weight:600;
             border:none;
             border-radius:10px;
             cursor:pointer;
@@ -189,13 +187,16 @@
         .btn-submit:hover { background:#5568d3; transform:translateY(-2px); }
         .btn-next { background:#764ba2; color:#fff; }
         .btn-next:hover { background:#5f3a82; transform:translateY(-2px); }
+        .btn-answer { background:#444; color:#fff; }
+        .btn-answer:hover { background:#222; transform:translateY(-2px); }
         .feedback {
-            margin-top:20px;
-            padding:15px;
+            margin-top:18px;
+            padding:14px 16px;
             border-radius:10px;
-            font-weight:bold;
-            text-align:center;
+            font-weight:600;
+            line-height:1.4;
             display:none;
+            font-size:.95rem;
         }
         .feedback.correct {
             background:#d4edda;
@@ -203,12 +204,33 @@
             border:2px solid #c3e6cb;
             display:block;
         }
-        .feedback.incorrect {
+        .feedback.incorrect, .feedback.revealed {
             background:#f8d7da;
             color:#721c24;
             border:2px solid #f5c6cb;
             display:block;
         }
+        .explanations {
+            margin-top:14px;
+            background:#f4f6ff;
+            border:1px solid #d8def7;
+            border-radius:10px;
+            padding:12px 14px;
+            font-size:.85rem;
+            line-height:1.5;
+        }
+        .explanations h4 {
+            margin:0 0 6px;
+            font-size:.85rem;
+            color:#394b9f;
+            letter-spacing:.5px;
+        }
+        .explanations ul {
+            list-style:disc;
+            padding-left:20px;
+            margin:0;
+        }
+        .explanations li { margin:2px 0; }
         .stats {
             display:flex;
             justify-content:space-around;
@@ -232,12 +254,12 @@
         .return-btn {
             margin-top:15px;
             width:100%;
-            background:#444;
+            background:#444 !important;
         }
-        .return-btn:hover { background:#222; }
+        .return-btn:hover { background:#222 !important; }
         @media (max-width:520px) {
-            .range-row input { width:100px; }
             .question-text { font-size:1.3em; }
+            .button-group { flex-direction:column; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -255,8 +277,7 @@
             <input type="number" id="rangeEnd" placeholder="例: 700" min="1">
         </div>
         <div class="info">
-            範囲を空欄のまま開始すると、登録されている全単語(存在する番号のみ)から出題します。<br>
-            欠番があっても存在する単語だけで問題を作成します。存在しなければエラーになります。
+            範囲を空欄で開始→全登録単語から出題。欠番は自動除外。該当なしならエラー。
         </div>
         <div class="start-buttons">
             <button class="btn" id="startBtn">出題開始</button>
@@ -276,7 +297,7 @@
             <div class="question-text" id="questionText">ここに問題が表示されます</div>
 
             <div class="input-area hidden" id="inputArea">
-                <input type="text" id="answerInput" placeholder="答えを入力してください">
+                <input type="text" id="answerInput" placeholder="答えを入力してください (空欄送信可)">
             </div>
 
             <div class="choices hidden" id="choicesArea">
@@ -289,10 +310,13 @@
 
         <div class="button-group">
             <button class="btn-submit" id="submitBtn">回答する</button>
+            <button class="btn-answer" id="showAnswerBtn">答えを見る</button>
             <button class="btn-next hidden" id="nextBtn">次へ</button>
         </div>
 
         <div class="feedback" id="feedback"></div>
+        <div id="explanations" class="explanations hidden"></div>
+
         <button id="backToSettingBtn" class="btn return-btn">設定に戻る</button>
     </div>
 
@@ -309,11 +333,6 @@
 </div>
 
 <script>
-/*
-  単語データ: 651～700
-  スペルミス intelliget -> intelligent 修正済み
-  （日本語訳は原文どおり / 必要なら後で調整可能）
-*/
 const wordData = [
     { number:651, english:"interfere", japanese:"邪魔をする" },
     { number:652, english:"trust", japanese:"〜を信頼する" },
@@ -367,7 +386,6 @@ const wordData = [
     { number:700, english:"intelligent", japanese:"知能の高い" },
 ];
 
-// 状態変数
 let activeWords = [];
 let questions = [];
 let currentQuestionIndex = 0;
@@ -376,8 +394,9 @@ let incorrectCount = 0;
 let currentAnswer = null;
 let selectedChoice = null;
 let quizStarted = false;
+let questionAnswered = false; // 新規: 回答/答え表示済み判定
 
-// DOM参照
+// DOM
 const settingsPanel = document.getElementById('settingsPanel');
 const questionArea = document.getElementById('questionArea');
 const statsPanel = document.getElementById('statsPanel');
@@ -387,7 +406,9 @@ const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const submitBtn = document.getElementById('submitBtn');
 const nextBtn = document.getElementById('nextBtn');
+const showAnswerBtn = document.getElementById('showAnswerBtn');
 const backToSettingBtn = document.getElementById('backToSettingBtn');
+const explanationsDiv = document.getElementById('explanations');
 
 function sanitizeRange() {
     let start = rangeStartInput.value.trim();
@@ -404,11 +425,10 @@ function sanitizeRange() {
 
 startBtn.addEventListener('click', () => {
     const { start, end } = sanitizeRange();
-    if (start === null && end === null) {
-        activeWords = [...wordData];
-    } else {
-        activeWords = wordData.filter(w => w.number >= start && w.number <= end);
-    }
+    activeWords = (start === null && end === null)
+        ? [...wordData]
+        : wordData.filter(w => w.number >= start && w.number <= end);
+
     if (activeWords.length === 0) {
         Swal.fire({ icon:'error', title:'エラー', text:'指定範囲に単語データがありません。' });
         return;
@@ -448,8 +468,8 @@ function hardReset() {
     currentQuestionIndex = 0;
     correctCount = 0;
     incorrectCount = 0;
-    updateStats();
     quizStarted = false;
+    updateStats();
     questionArea.classList.add('hidden');
     statsPanel.classList.add('hidden');
     settingsPanel.classList.remove('hidden');
@@ -473,21 +493,23 @@ function updateStats() {
 
 function generateQuestions() {
     questions = [];
-    activeWords.forEach(word => {
+    // 日→英
+    activeWords.forEach(w => {
         questions.push({
             type:'ja-en',
-            word,
-            question: word.japanese,
-            answer: word.english
+            word:w,
+            question:w.japanese,
+            answer:w.english
         });
     });
-    activeWords.forEach(word => {
-        const choices = generateChoices(word);
+    // 英→日
+    activeWords.forEach(w => {
+        const choices = generateChoices(w);
         questions.push({
             type:'en-ja',
-            word,
-            question: word.english,
-            answer: word.japanese,
+            word:w,
+            question:w.english,
+            answer:w.japanese,
             choices
         });
     });
@@ -525,6 +547,7 @@ function displayQuestion() {
     const q = questions[currentQuestionIndex];
     currentAnswer = q.answer;
     selectedChoice = null;
+    questionAnswered = false;
 
     document.getElementById('questionType').textContent =
         q.type === 'ja-en' ? '日→英 (スペル)' : '英→日 (選択)';
@@ -536,9 +559,12 @@ function displayQuestion() {
     const feedback = document.getElementById('feedback');
     feedback.className = 'feedback';
     feedback.style.display = 'none';
+    explanationsDiv.classList.add('hidden');
+    explanationsDiv.innerHTML = '';
 
-    document.getElementById('submitBtn').classList.remove('hidden');
-    document.getElementById('nextBtn').classList.add('hidden');
+    submitBtn.classList.remove('hidden');
+    showAnswerBtn.classList.remove('hidden');
+    nextBtn.classList.add('hidden');
 
     if (q.type === 'ja-en') {
         document.getElementById('inputArea').classList.remove('hidden');
@@ -559,45 +585,87 @@ function displayQuestion() {
 }
 
 function selectChoice(index) {
+    if (questionAnswered) return;
     selectedChoice = index;
     const choiceBtns = document.querySelectorAll('.choice-btn');
     choiceBtns.forEach((btn,i)=>btn.classList.toggle('selected', i===index));
 }
 
-function checkAnswer() {
+function checkAnswer(forceReveal=false) {
+    if (questionAnswered) return;
+
     const q = questions[currentQuestionIndex];
     let userAnswer = '';
     let isCorrect = false;
 
     if (q.type === 'ja-en') {
         userAnswer = document.getElementById('answerInput').value.trim().toLowerCase();
-        if (userAnswer.length === 0) {
-            Swal.fire({ icon:'warning', title:'未入力', text:'答えを入力してください。' });
-            return;
+        // 空欄許可: そのまま不正解扱い
+        if (!forceReveal) {
+            isCorrect = userAnswer.length > 0 && userAnswer === currentAnswer.toLowerCase();
         }
-        isCorrect = userAnswer === currentAnswer.toLowerCase();
     } else {
-        if (selectedChoice === null) {
-            Swal.fire({ icon:'info', title:'選択してください', text:'選択肢を一つ選んでください。' });
-            return;
+        if (!forceReveal && selectedChoice !== null) {
+            userAnswer = q.choices[selectedChoice];
+            isCorrect = userAnswer === currentAnswer;
+        } else {
+            // 未選択で答え表示した / 強制表示
+            isCorrect = false;
         }
-        userAnswer = q.choices[selectedChoice];
-        isCorrect = userAnswer === currentAnswer;
     }
 
+    questionAnswered = true;
+
     const feedback = document.getElementById('feedback');
-    if (isCorrect) {
-        feedback.textContent = '正解！';
+    if (forceReveal) {
+        feedback.textContent = `【答え】 ${formatAnswerText(q)}（※答え表示）`;
+        feedback.className = 'feedback revealed';
+        incorrectCount++; // 表示＝不正解扱い
+    } else if (isCorrect) {
+        feedback.textContent = `正解！ / 正答: ${formatAnswerText(q)}`;
         feedback.className = 'feedback correct';
         correctCount++;
     } else {
-        feedback.textContent = `不正解... 正解は「${currentAnswer}」です`;
+        feedback.textContent = `不正解… 正答: ${formatAnswerText(q)}`;
         feedback.className = 'feedback incorrect';
         incorrectCount++;
     }
+    feedback.style.display = 'block';
     updateStats();
-    document.getElementById('submitBtn').classList.add('hidden');
-    document.getElementById('nextBtn').classList.remove('hidden');
+
+    // 選択肢解説
+    if (q.type === 'en-ja') {
+        buildChoiceExplanations(q);
+    } else {
+        // ja-en の場合も英語を再確認できるよう軽い表示は既に feedback に含む
+    }
+
+    submitBtn.classList.add('hidden');
+    showAnswerBtn.classList.add('hidden');
+    nextBtn.classList.remove('hidden');
+}
+
+function formatAnswerText(q) {
+    if (q.type === 'ja-en') {
+        return `${q.answer}（${q.word.japanese}）`;
+    } else {
+        return `${q.answer}（${q.word.english}）`;
+    }
+}
+
+function buildChoiceExplanations(q) {
+    // q.choices (Japanese). それぞれに対応する英単語を検索
+    const listItems = q.choices.map(jp => {
+        const entry = wordData.find(w => w.japanese === jp);
+        const en = entry ? entry.english : '未登録';
+        const isCorrect = jp === q.answer;
+        return `<li>${jp} ： ${en}${isCorrect ? ' <span style="color:#c0392b;">← 正答</span>' : ''}</li>`;
+    }).join('');
+    explanationsDiv.innerHTML = `
+        <h4>選択肢解説</h4>
+        <ul>${listItems}</ul>
+    `;
+    explanationsDiv.classList.remove('hidden');
 }
 
 function nextQuestion() {
@@ -632,7 +700,6 @@ function showResult() {
             </button>
         </div>
     `;
-
     document.getElementById('retryBtn').onclick = () => {
         currentQuestionIndex = 0;
         correctCount = 0;
@@ -642,7 +709,6 @@ function showResult() {
         generateQuestions();
         displayQuestion();
     };
-
     document.getElementById('toSettingBtn').onclick = () => {
         hardReset();
     };
@@ -658,7 +724,7 @@ function rebuildQuestionArea() {
         <div class="question-content">
             <div class="question-text" id="questionText">ここに問題が表示されます</div>
             <div class="input-area hidden" id="inputArea">
-                <input type="text" id="answerInput" placeholder="答えを入力してください">
+                <input type="text" id="answerInput" placeholder="答えを入力してください (空欄送信可)">
             </div>
             <div class="choices hidden" id="choicesArea">
                 <button class="choice-btn" data-choice="0"></button>
@@ -669,12 +735,16 @@ function rebuildQuestionArea() {
         </div>
         <div class="button-group">
             <button class="btn-submit" id="submitBtn">回答する</button>
+            <button class="btn-answer" id="showAnswerBtn">答えを見る</button>
             <button class="btn-next hidden" id="nextBtn">次へ</button>
         </div>
         <div class="feedback" id="feedback"></div>
+        <div id="explanations" class="explanations hidden"></div>
         <button id="backToSettingBtn" class="btn return-btn">設定に戻る</button>
     `;
-    document.getElementById('submitBtn').addEventListener('click', checkAnswer);
+    // 再バインド
+    document.getElementById('submitBtn').addEventListener('click', ()=>checkAnswer(false));
+    document.getElementById('showAnswerBtn').addEventListener('click', ()=>checkAnswer(true));
     document.getElementById('nextBtn').addEventListener('click', nextQuestion);
     document.getElementById('backToSettingBtn').addEventListener('click', ()=> {
         Swal.fire({
@@ -687,6 +757,8 @@ function rebuildQuestionArea() {
         }).then(res=>{ if (res.isConfirmed) hardReset(); });
     });
     document.addEventListener('keydown', globalKeyHandler);
+    // DOM参照更新
+    explanationsDiv = document.getElementById('explanations');
 }
 
 function globalKeyHandler(e) {
@@ -694,14 +766,16 @@ function globalKeyHandler(e) {
         const submitVisible = document.getElementById('submitBtn') && !document.getElementById('submitBtn').classList.contains('hidden');
         const nextVisible = document.getElementById('nextBtn') && !document.getElementById('nextBtn').classList.contains('hidden');
         if (submitVisible) {
-            checkAnswer();
+            checkAnswer(false);
         } else if (nextVisible) {
             nextQuestion();
         }
     }
 }
 
-submitBtn.addEventListener('click', checkAnswer);
+// 初期バインド
+submitBtn.addEventListener('click', ()=>checkAnswer(false));
+showAnswerBtn.addEventListener('click', ()=>checkAnswer(true));
 nextBtn.addEventListener('click', nextQuestion);
 document.addEventListener('keydown', globalKeyHandler);
 rangeEndInput.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
