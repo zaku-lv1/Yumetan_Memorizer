@@ -283,6 +283,9 @@
             <button class="btn" id="startBtn">出題開始</button>
             <button class="btn btn-secondary" id="resetBtn" type="button">リセット</button>
         </div>
+        <div style="margin-top: 12px;">
+            <button class="btn" id="reviewBtn" style="width: 100%; background: #e74c3c;">間違えた問題を復習</button>
+        </div>
     </div>
 
     <div id="questionArea" class="hidden">
@@ -395,6 +398,8 @@ let currentAnswer = null;
 let selectedChoice = null;
 let quizStarted = false;
 let questionAnswered = false; // 新規: 回答/答え表示済み判定
+let reviewMode = false; // 復習モード判定
+let wordStats = {}; // 単語ごとの正答・誤答記録
 
 // DOM
 const settingsPanel = document.getElementById('settingsPanel');
@@ -404,11 +409,63 @@ const rangeStartInput = document.getElementById('rangeStart');
 const rangeEndInput = document.getElementById('rangeEnd');
 const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
+const reviewBtn = document.getElementById('reviewBtn');
 const submitBtn = document.getElementById('submitBtn');
 const nextBtn = document.getElementById('nextBtn');
 const showAnswerBtn = document.getElementById('showAnswerBtn');
 const backToSettingBtn = document.getElementById('backToSettingBtn');
 const explanationsDiv = document.getElementById('explanations');
+
+// localStorage関連関数
+function loadWordStats() {
+    const saved = localStorage.getItem('yumetan_word_stats');
+    if (saved) {
+        try {
+            wordStats = JSON.parse(saved);
+        } catch (e) {
+            wordStats = {};
+        }
+    } else {
+        wordStats = {};
+    }
+}
+
+function saveWordStats() {
+    localStorage.setItem('yumetan_word_stats', JSON.stringify(wordStats));
+}
+
+function recordAnswer(wordNumber, isCorrect) {
+    if (!wordStats[wordNumber]) {
+        wordStats[wordNumber] = { correct: 0, incorrect: 0 };
+    }
+    if (isCorrect) {
+        wordStats[wordNumber].correct++;
+    } else {
+        wordStats[wordNumber].incorrect++;
+    }
+    saveWordStats();
+}
+
+function getAccuracy(wordNumber) {
+    const stats = wordStats[wordNumber];
+    if (!stats || (stats.correct + stats.incorrect) === 0) return null;
+    return Math.round((stats.correct / (stats.correct + stats.incorrect)) * 100);
+}
+
+function getIncorrectWords() {
+    const incorrectWordNumbers = [];
+    for (const num in wordStats) {
+        const stats = wordStats[num];
+        // 誤答が1回以上あり、正答率が80%未満の単語
+        if (stats.incorrect > 0 && getAccuracy(num) < 80) {
+            incorrectWordNumbers.push(parseInt(num));
+        }
+    }
+    return wordData.filter(w => incorrectWordNumbers.includes(w.number));
+}
+
+// 初期化時にlocalStorageから読み込み
+loadWordStats();
 
 function sanitizeRange() {
     let start = rangeStartInput.value.trim();
@@ -424,13 +481,18 @@ function sanitizeRange() {
 }
 
 startBtn.addEventListener('click', () => {
+    reviewMode = false;
     const { start, end } = sanitizeRange();
     activeWords = (start === null && end === null)
         ? [...wordData]
         : wordData.filter(w => w.number >= start && w.number <= end);
 
     if (activeWords.length === 0) {
-        Swal.fire({ icon:'error', title:'エラー', text:'指定範囲に単語データがありません。' });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon:'error', title:'エラー', text:'指定範囲に単語データがありません。' });
+        } else {
+            alert('エラー\n\n指定範囲に単語データがありません。');
+        }
         return;
     }
     currentQuestionIndex = 0;
@@ -445,16 +507,50 @@ startBtn.addEventListener('click', () => {
     quizStarted = true;
 });
 
+reviewBtn.addEventListener('click', () => {
+    const incorrectWords = getIncorrectWords();
+    if (incorrectWords.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ 
+                icon:'info', 
+                title:'復習する問題がありません', 
+                text:'まだ間違えた問題がないか、全ての問題の正答率が80%以上です。'
+            });
+        } else {
+            alert('復習する問題がありません\n\nまだ間違えた問題がないか、全ての問題の正答率が80%以上です。');
+        }
+        return;
+    }
+    reviewMode = true;
+    activeWords = incorrectWords;
+    currentQuestionIndex = 0;
+    correctCount = 0;
+    incorrectCount = 0;
+    updateStats();
+    generateQuestions();
+    displayQuestion();
+    settingsPanel.classList.add('hidden');
+    questionArea.classList.remove('hidden');
+    statsPanel.classList.remove('hidden');
+    quizStarted = true;
+});
+
 resetBtn.addEventListener('click', () => {
     if (quizStarted) {
-        Swal.fire({
-            icon:'question',
-            title:'確認',
-            text:'現在の進行状況をリセットしますか？',
-            showCancelButton:true,
-            confirmButtonText:'はい',
-            cancelButtonText:'いいえ',
-        }).then(r => { if (r.isConfirmed) hardReset(); });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon:'question',
+                title:'確認',
+                text:'現在の進行状況をリセットしますか？',
+                showCancelButton:true,
+                confirmButtonText:'はい',
+                cancelButtonText:'いいえ',
+            }).then(r => { if (r.isConfirmed) hardReset(); });
+        } else {
+            if (confirm('現在の進行状況をリセットしますか？')) {
+                hardReset();
+            }
+        }
     } else {
         hardReset();
     }
@@ -469,6 +565,7 @@ function hardReset() {
     correctCount = 0;
     incorrectCount = 0;
     quizStarted = false;
+    reviewMode = false;
     updateStats();
     questionArea.classList.add('hidden');
     statsPanel.classList.add('hidden');
@@ -476,14 +573,20 @@ function hardReset() {
 }
 
 backToSettingBtn.addEventListener('click', () => {
-    Swal.fire({
-        icon:'question',
-        title:'設定に戻りますか？',
-        text:'現在のクイズ進行は破棄されます。',
-        showCancelButton:true,
-        confirmButtonText:'戻る',
-        cancelButtonText:'キャンセル'
-    }).then(res => { if (res.isConfirmed) hardReset(); });
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon:'question',
+            title:'設定に戻りますか？',
+            text:'現在のクイズ進行は破棄されます。',
+            showCancelButton:true,
+            confirmButtonText:'戻る',
+            cancelButtonText:'キャンセル'
+        }).then(res => { if (res.isConfirmed) hardReset(); });
+    } else {
+        if (confirm('設定に戻りますか？\n\n現在のクイズ進行は破棄されます。')) {
+            hardReset();
+        }
+    }
 });
 
 function updateStats() {
@@ -514,7 +617,10 @@ function generateQuestions() {
         });
     });
     shuffleArray(questions);
-    document.getElementById('totalQuestions').textContent = questions.length;
+    const totalQuestionsEl = document.getElementById('totalQuestions');
+    if (totalQuestionsEl) {
+        totalQuestionsEl.textContent = questions.length;
+    }
 }
 
 function generateChoices(correctWord) {
@@ -621,14 +727,17 @@ function checkAnswer(forceReveal=false) {
         feedback.textContent = `【答え】 ${formatAnswerText(q)}（※答え表示）`;
         feedback.className = 'feedback revealed';
         incorrectCount++; // 表示＝不正解扱い
+        recordAnswer(q.word.number, false);
     } else if (isCorrect) {
         feedback.textContent = `正解！ / 正答: ${formatAnswerText(q)}`;
         feedback.className = 'feedback correct';
         correctCount++;
+        recordAnswer(q.word.number, true);
     } else {
         feedback.textContent = `不正解… 正答: ${formatAnswerText(q)}`;
         feedback.className = 'feedback incorrect';
         incorrectCount++;
+        recordAnswer(q.word.number, false);
     }
     feedback.style.display = 'block';
     updateStats();
@@ -677,6 +786,27 @@ function showResult() {
     const total = questions.length;
     const percentage = total === 0 ? 0 : Math.round((correctCount / total) * 100);
 
+    // 各単語の統計情報を表示
+    let wordStatsHtml = '<div style="margin-top:30px; max-height:300px; overflow-y:auto;">';
+    wordStatsHtml += '<h3 style="color:#667eea; font-size:1.1em; margin-bottom:15px;">単語別正答率</h3>';
+    wordStatsHtml += '<div style="display:grid; gap:8px;">';
+    
+    activeWords.forEach(word => {
+        const accuracy = getAccuracy(word.number);
+        const stats = wordStats[word.number];
+        if (stats && (stats.correct + stats.incorrect) > 0) {
+            const color = accuracy >= 80 ? '#27ae60' : accuracy >= 50 ? '#f39c12' : '#e74c3c';
+            wordStatsHtml += `
+                <div style="background:#f8f9fa; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid ${color};">
+                    <span style="font-weight:600;">No.${word.number} ${word.english}</span>
+                    <span style="color:${color}; font-weight:bold;">${accuracy}% (${stats.correct}/${stats.correct + stats.incorrect})</span>
+                </div>
+            `;
+        }
+    });
+    
+    wordStatsHtml += '</div></div>';
+
     questionArea.innerHTML = `
         <div style="text-align:center; padding:40px 0;">
             <h2 style="color:#667eea; margin-bottom:20px;">お疲れ様でした！</h2>
@@ -698,6 +828,7 @@ function showResult() {
                        font-weight:bold; cursor:pointer;">
                 設定に戻る
             </button>
+            ${wordStatsHtml}
         </div>
     `;
     document.getElementById('retryBtn').onclick = () => {
@@ -747,14 +878,20 @@ function rebuildQuestionArea() {
     document.getElementById('showAnswerBtn').addEventListener('click', ()=>checkAnswer(true));
     document.getElementById('nextBtn').addEventListener('click', nextQuestion);
     document.getElementById('backToSettingBtn').addEventListener('click', ()=> {
-        Swal.fire({
-            icon:'question',
-            title:'設定に戻りますか？',
-            text:'現在のクイズ進行は破棄されます。',
-            showCancelButton:true,
-            confirmButtonText:'戻る',
-            cancelButtonText:'キャンセル'
-        }).then(res=>{ if (res.isConfirmed) hardReset(); });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon:'question',
+                title:'設定に戻りますか？',
+                text:'現在のクイズ進行は破棄されます。',
+                showCancelButton:true,
+                confirmButtonText:'戻る',
+                cancelButtonText:'キャンセル'
+            }).then(res=>{ if (res.isConfirmed) hardReset(); });
+        } else {
+            if (confirm('設定に戻りますか？\n\n現在のクイズ進行は破棄されます。')) {
+                hardReset();
+            }
+        }
     });
     document.addEventListener('keydown', globalKeyHandler);
     // DOM参照更新
