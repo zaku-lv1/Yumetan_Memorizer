@@ -400,6 +400,7 @@ let quizStarted = false;
 let questionAnswered = false; // 新規: 回答/答え表示済み判定
 let reviewMode = false; // 復習モード判定
 let wordStats = {}; // 単語ごとの正答・誤答記録
+let incorrectAnswers = []; // セッション中の間違えた答えを記録
 
 // DOM
 const settingsPanel = document.getElementById('settingsPanel');
@@ -498,6 +499,7 @@ startBtn.addEventListener('click', () => {
     currentQuestionIndex = 0;
     correctCount = 0;
     incorrectCount = 0;
+    incorrectAnswers = [];
     updateStats();
     generateQuestions();
     displayQuestion();
@@ -526,6 +528,7 @@ reviewBtn.addEventListener('click', () => {
     currentQuestionIndex = 0;
     correctCount = 0;
     incorrectCount = 0;
+    incorrectAnswers = [];
     updateStats();
     generateQuestions();
     displayQuestion();
@@ -728,6 +731,15 @@ function checkAnswer(forceReveal=false) {
         feedback.className = 'feedback revealed';
         incorrectCount++; // 表示＝不正解扱い
         recordAnswer(q.word.number, false);
+        // 間違えた答えを記録
+        incorrectAnswers.push({
+            word: q.word,
+            questionType: q.type,
+            question: q.question,
+            correctAnswer: q.answer,
+            userAnswer: '（答えを表示）',
+            wasRevealed: true
+        });
     } else if (isCorrect) {
         feedback.textContent = `正解！ / 正答: ${formatAnswerText(q)}`;
         feedback.className = 'feedback correct';
@@ -738,6 +750,15 @@ function checkAnswer(forceReveal=false) {
         feedback.className = 'feedback incorrect';
         incorrectCount++;
         recordAnswer(q.word.number, false);
+        // 間違えた答えを記録
+        incorrectAnswers.push({
+            word: q.word,
+            questionType: q.type,
+            question: q.question,
+            correctAnswer: q.answer,
+            userAnswer: userAnswer || '（未回答）',
+            wasRevealed: false
+        });
     }
     feedback.style.display = 'block';
     updateStats();
@@ -786,6 +807,37 @@ function showResult() {
     const total = questions.length;
     const percentage = total === 0 ? 0 : Math.round((correctCount / total) * 100);
 
+    // 間違えた答えのセクションを作成
+    let incorrectAnswersHtml = '';
+    if (incorrectAnswers.length > 0) {
+        incorrectAnswersHtml = '<div style="margin-top:30px; max-height:400px; overflow-y:auto;">';
+        incorrectAnswersHtml += '<h3 style="color:#e74c3c; font-size:1.1em; margin-bottom:15px;">間違えた問題</h3>';
+        incorrectAnswersHtml += '<div style="display:grid; gap:12px;">';
+        
+        incorrectAnswers.forEach((item, index) => {
+            const typeLabel = item.questionType === 'ja-en' ? '日→英' : '英→日';
+            incorrectAnswersHtml += `
+                <div style="background:#fff5f5; padding:14px; border-radius:8px; border-left:4px solid #e74c3c;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-weight:600; color:#333;">No.${item.word.number} ${item.word.english}</span>
+                        <span style="background:#e74c3c; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.85em;">${typeLabel}</span>
+                    </div>
+                    <div style="margin-bottom:6px;">
+                        <span style="font-weight:600; color:#555;">問題:</span> ${item.question}
+                    </div>
+                    <div style="margin-bottom:4px;">
+                        <span style="font-weight:600; color:#e74c3c;">あなたの答え:</span> <span style="color:#c0392b;">${item.userAnswer}</span>
+                    </div>
+                    <div>
+                        <span style="font-weight:600; color:#27ae60;">正しい答え:</span> <span style="color:#229954;">${item.correctAnswer}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        incorrectAnswersHtml += '</div></div>';
+    }
+
     // 各単語の統計情報を表示
     let wordStatsHtml = '<div style="margin-top:30px; max-height:300px; overflow-y:auto;">';
     wordStatsHtml += '<h3 style="color:#667eea; font-size:1.1em; margin-bottom:15px;">単語別正答率</h3>';
@@ -828,6 +880,7 @@ function showResult() {
                        font-weight:bold; cursor:pointer;">
                 設定に戻る
             </button>
+            ${incorrectAnswersHtml}
             ${wordStatsHtml}
         </div>
     `;
@@ -835,6 +888,7 @@ function showResult() {
         currentQuestionIndex = 0;
         correctCount = 0;
         incorrectCount = 0;
+        incorrectAnswers = [];
         updateStats();
         rebuildQuestionArea();
         generateQuestions();
