@@ -276,8 +276,13 @@
             <label for="rangeEnd">終了No.</label>
             <input type="number" id="rangeEnd" placeholder="例: 700" min="1">
         </div>
+        <div class="range-row" style="margin-top: 10px;">
+            <label for="batchSize">問題数/回</label>
+            <input type="number" id="batchSize" placeholder="例: 10" min="1" value="">
+        </div>
         <div class="info">
-            範囲を空欄で開始→全登録単語から出題。欠番は自動除外。該当なしならエラー。
+            範囲を空欄で開始→全登録単語から出題。欠番は自動除外。該当なしならエラー。<br>
+            問題数/回を設定すると、指定した数ずつ出題。空欄で全問出題。
         </div>
         <div class="start-buttons">
             <button class="btn" id="startBtn">出題開始</button>
@@ -401,13 +406,17 @@ let questionAnswered = false; // 新規: 回答/答え表示済み判定
 let reviewMode = false; // 復習モード判定
 let wordStats = {}; // 単語ごとの正答・誤答記録
 let incorrectAnswers = []; // セッション中の間違えた答えを記録
+let batchMode = false; // バッチモード判定
+let batchSize = 0; // バッチサイズ
+let originalRange = { start: null, end: null }; // 元の範囲
+let usedWords = []; // 使用済み単語
 
-// DOM
 const settingsPanel = document.getElementById('settingsPanel');
 const questionArea = document.getElementById('questionArea');
 const statsPanel = document.getElementById('statsPanel');
 const rangeStartInput = document.getElementById('rangeStart');
 const rangeEndInput = document.getElementById('rangeEnd');
+const batchSizeInput = document.getElementById('batchSize');
 const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const reviewBtn = document.getElementById('reviewBtn');
@@ -415,7 +424,7 @@ const submitBtn = document.getElementById('submitBtn');
 const nextBtn = document.getElementById('nextBtn');
 const showAnswerBtn = document.getElementById('showAnswerBtn');
 const backToSettingBtn = document.getElementById('backToSettingBtn');
-const explanationsDiv = document.getElementById('explanations');
+let explanationsDiv = document.getElementById('explanations');
 
 // localStorage関連関数
 function loadWordStats() {
@@ -468,6 +477,30 @@ function getIncorrectWords() {
 // 初期化時にlocalStorageから読み込み
 loadWordStats();
 
+function selectNextBatch(allWords, currentUsedWords) {
+    // 正答率でソート（低い順）、次に未使用の単語を優先
+    const wordsWithPriority = allWords.map(w => {
+        const accuracy = getAccuracy(w.number);
+        const isUsed = currentUsedWords.some(uw => uw.number === w.number);
+        return {
+            word: w,
+            accuracy: accuracy === null ? 100 : accuracy, // 未回答は優先度低め
+            isUsed: isUsed
+        };
+    });
+
+    // ソート: 未使用優先、正答率が低い順
+    wordsWithPriority.sort((a, b) => {
+        if (a.isUsed !== b.isUsed) return a.isUsed ? 1 : -1;
+        return a.accuracy - b.accuracy;
+    });
+
+    // バッチサイズ分取得 (各単語は2問生成されるので、batchSize/2の単語を選択)
+    const wordsNeeded = Math.ceil(batchSize / 2);
+    const selected = wordsWithPriority.slice(0, wordsNeeded).map(item => item.word);
+    return selected;
+}
+
 function sanitizeRange() {
     let start = rangeStartInput.value.trim();
     let end = rangeEndInput.value.trim();
@@ -484,11 +517,11 @@ function sanitizeRange() {
 startBtn.addEventListener('click', () => {
     reviewMode = false;
     const { start, end } = sanitizeRange();
-    activeWords = (start === null && end === null)
+    const allWords = (start === null && end === null)
         ? [...wordData]
         : wordData.filter(w => w.number >= start && w.number <= end);
 
-    if (activeWords.length === 0) {
+    if (allWords.length === 0) {
         if (typeof Swal !== 'undefined') {
             Swal.fire({ icon:'error', title:'エラー', text:'指定範囲に単語データがありません。' });
         } else {
@@ -496,6 +529,17 @@ startBtn.addEventListener('click', () => {
         }
         return;
     }
+
+    // バッチサイズの取得
+    const batchSizeValue = parseInt(batchSizeInput.value, 10);
+    batchMode = !isNaN(batchSizeValue) && batchSizeValue > 0;
+    batchSize = batchMode ? batchSizeValue : allWords.length * 2; // 各単語は2問生成される
+    originalRange = { start, end };
+    usedWords = [];
+
+    // 最初のバッチを選択
+    activeWords = selectNextBatch(allWords, []);
+    
     currentQuestionIndex = 0;
     correctCount = 0;
     incorrectCount = 0;
@@ -569,6 +613,10 @@ function hardReset() {
     incorrectCount = 0;
     quizStarted = false;
     reviewMode = false;
+    batchMode = false;
+    batchSize = 0;
+    originalRange = { start: null, end: null };
+    usedWords = [];
     updateStats();
     questionArea.classList.add('hidden');
     statsPanel.classList.add('hidden');
@@ -807,6 +855,16 @@ function showResult() {
     const total = questions.length;
     const percentage = total === 0 ? 0 : Math.round((correctCount / total) * 100);
 
+    // バッチモードの場合、次のバッチがあるかチェック
+    const { start, end } = originalRange;
+    const allWords = (start === null && end === null)
+        ? [...wordData]
+        : wordData.filter(w => w.number >= start && w.number <= end);
+    
+    // 現在のバッチを使用済みに追加
+    usedWords = [...usedWords, ...activeWords];
+    const hasMoreWords = usedWords.length < allWords.length && batchMode;
+
     // 間違えた答えのセクションを作成
     let incorrectAnswersHtml = '';
     if (incorrectAnswers.length > 0) {
@@ -859,6 +917,47 @@ function showResult() {
     
     wordStatsHtml += '</div></div>';
 
+    // バッチ進捗情報
+    let batchProgressHtml = '';
+    if (batchMode) {
+        batchProgressHtml = `
+            <div style="margin-top:20px; padding:12px; background:#f0f7ff; border-radius:8px; border:2px solid #667eea;">
+                <div style="font-weight:600; color:#667eea; margin-bottom:5px;">進捗状況</div>
+                <div style="color:#555;">${usedWords.length} / ${allWords.length} 単語完了</div>
+            </div>
+        `;
+    }
+
+    // ボタンの作成
+    let buttonsHtml = `
+        <button id="retryBtn"
+            style="background:#667eea; color:#fff; padding:15px 40px;
+                   border:none; border-radius:10px; font-size:1.1em;
+                   font-weight:bold; cursor:pointer; margin-right:10px;">
+            同じ範囲でもう一度
+        </button>
+    `;
+    
+    if (hasMoreWords) {
+        buttonsHtml += `
+            <button id="continueBtn"
+                style="background:#27ae60; color:#fff; padding:15px 40px;
+                       border:none; border-radius:10px; font-size:1.1em;
+                       font-weight:bold; cursor:pointer; margin-right:10px;">
+                次のバッチへ進む
+            </button>
+        `;
+    }
+    
+    buttonsHtml += `
+        <button id="toSettingBtn"
+            style="background:#764ba2; color:#fff; padding:15px 40px;
+                   border:none; border-radius:10px; font-size:1.1em;
+                   font-weight:bold; cursor:pointer;">
+            設定に戻る
+        </button>
+    `;
+
     questionArea.innerHTML = `
         <div style="text-align:center; padding:40px 0;">
             <h2 style="color:#667eea; margin-bottom:20px;">お疲れ様でした！</h2>
@@ -868,22 +967,15 @@ function showResult() {
             <div style="font-size:1.2em; color:#666; margin-bottom:30px;">
                 ${correctCount}/${total} 問正解
             </div>
-            <button id="retryBtn"
-                style="background:#667eea; color:#fff; padding:15px 40px;
-                       border:none; border-radius:10px; font-size:1.1em;
-                       font-weight:bold; cursor:pointer; margin-right:10px;">
-                同じ範囲でもう一度
-            </button>
-            <button id="toSettingBtn"
-                style="background:#764ba2; color:#fff; padding:15px 40px;
-                       border:none; border-radius:10px; font-size:1.1em;
-                       font-weight:bold; cursor:pointer;">
-                設定に戻る
-            </button>
+            ${batchProgressHtml}
+            <div style="margin-top:30px;">
+                ${buttonsHtml}
+            </div>
             ${incorrectAnswersHtml}
             ${wordStatsHtml}
         </div>
     `;
+    
     document.getElementById('retryBtn').onclick = () => {
         currentQuestionIndex = 0;
         correctCount = 0;
@@ -894,6 +986,22 @@ function showResult() {
         generateQuestions();
         displayQuestion();
     };
+    
+    if (hasMoreWords) {
+        document.getElementById('continueBtn').onclick = () => {
+            // 次のバッチを選択
+            activeWords = selectNextBatch(allWords, usedWords);
+            currentQuestionIndex = 0;
+            correctCount = 0;
+            incorrectCount = 0;
+            incorrectAnswers = [];
+            updateStats();
+            rebuildQuestionArea();
+            generateQuestions();
+            displayQuestion();
+        };
+    }
+    
     document.getElementById('toSettingBtn').onclick = () => {
         hardReset();
     };
@@ -971,6 +1079,7 @@ nextBtn.addEventListener('click', nextQuestion);
 document.addEventListener('keydown', globalKeyHandler);
 rangeEndInput.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
 rangeStartInput.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
+batchSizeInput.addEventListener('keydown', e => { if (e.key === 'Enter') startBtn.click(); });
 </script>
 </body>
 </html>
