@@ -424,7 +424,6 @@ const submitBtn = document.getElementById('submitBtn');
 const nextBtn = document.getElementById('nextBtn');
 const showAnswerBtn = document.getElementById('showAnswerBtn');
 const backToSettingBtn = document.getElementById('backToSettingBtn');
-let explanationsDiv = document.getElementById('explanations');
 
 // localStorage関連関数
 function loadWordStats() {
@@ -682,8 +681,17 @@ function generateChoices(correctWord) {
     for (let i=0; i<shuffled.length && choices.length<4; i++) {
         if (!choices.includes(shuffled[i].japanese)) choices.push(shuffled[i].japanese);
     }
+    // If not enough choices from activeWords, use wordData
+    if (choices.length < 4) {
+        const allOthers = wordData.filter(w => w.number !== correctWord.number && !choices.includes(w.japanese));
+        shuffleArray(allOthers);
+        for (let i=0; i<allOthers.length && choices.length<4; i++) {
+            choices.push(allOthers[i].japanese);
+        }
+    }
+    // Fallback: duplicate if still not enough (shouldn't happen with enough word data)
     while (choices.length < 4) {
-        choices.push(choices[Math.floor(Math.random()*choices.length)]);
+        choices.push(choices[0]);
     }
     shuffleArray(choices);
     return choices;
@@ -716,12 +724,13 @@ function displayQuestion() {
     const feedback = document.getElementById('feedback');
     feedback.className = 'feedback';
     feedback.style.display = 'none';
+    const explanationsDiv = document.getElementById('explanations');
     explanationsDiv.classList.add('hidden');
     explanationsDiv.innerHTML = '';
 
-    submitBtn.classList.remove('hidden');
-    showAnswerBtn.classList.remove('hidden');
-    nextBtn.classList.add('hidden');
+    document.getElementById('submitBtn').classList.remove('hidden');
+    document.getElementById('showAnswerBtn').classList.remove('hidden');
+    document.getElementById('nextBtn').classList.add('hidden');
 
     if (q.type === 'ja-en') {
         document.getElementById('inputArea').classList.remove('hidden');
@@ -818,9 +827,9 @@ function checkAnswer(forceReveal=false) {
         // ja-en の場合も英語を再確認できるよう軽い表示は既に feedback に含む
     }
 
-    submitBtn.classList.add('hidden');
-    showAnswerBtn.classList.add('hidden');
-    nextBtn.classList.remove('hidden');
+    document.getElementById('submitBtn').classList.add('hidden');
+    document.getElementById('showAnswerBtn').classList.add('hidden');
+    document.getElementById('nextBtn').classList.remove('hidden');
 }
 
 function formatAnswerText(q) {
@@ -833,6 +842,7 @@ function formatAnswerText(q) {
 
 function buildChoiceExplanations(q) {
     // q.choices (Japanese). それぞれに対応する英単語を検索
+    const explanationsDiv = document.getElementById('explanations');
     const listItems = q.choices.map(jp => {
         const entry = wordData.find(w => w.japanese === jp);
         const en = entry ? entry.english : '未登録';
@@ -1055,9 +1065,6 @@ function rebuildQuestionArea() {
             }
         }
     });
-    document.addEventListener('keydown', globalKeyHandler);
-    // DOM参照更新
-    explanationsDiv = document.getElementById('explanations');
 }
 
 function globalKeyHandler(e) {
