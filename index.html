@@ -494,8 +494,8 @@ function selectNextBatch(allWords, currentUsedWords) {
         return a.accuracy - b.accuracy;
     });
 
-    // バッチサイズ分取得 (各単語は2問生成されるので、batchSize/2の単語を選択)
-    const wordsNeeded = Math.ceil(batchSize / 2);
+    // バッチサイズ分取得 (各単語は1問生成されるので、batchSizeの単語を選択)
+    const wordsNeeded = batchSize;
     const selected = wordsWithPriority.slice(0, wordsNeeded).map(item => item.word);
     return selected;
 }
@@ -532,7 +532,7 @@ startBtn.addEventListener('click', () => {
     // バッチサイズの取得
     const batchSizeValue = parseInt(batchSizeInput.value, 10);
     batchMode = !isNaN(batchSizeValue) && batchSizeValue > 0;
-    batchSize = batchMode ? batchSizeValue : allWords.length * 2; // 各単語は2問生成される
+    batchSize = batchMode ? batchSizeValue : allWords.length; // 各単語は1問生成される
     originalRange = { start, end };
     usedWords = [];
 
@@ -646,25 +646,28 @@ function updateStats() {
 
 function generateQuestions() {
     questions = [];
-    // 日→英
+    // 各単語につき1問のみ生成（日→英 または 英→日 をランダムに選択）
     activeWords.forEach(w => {
-        questions.push({
-            type:'ja-en',
-            word:w,
-            question:w.japanese,
-            answer:w.english
-        });
-    });
-    // 英→日
-    activeWords.forEach(w => {
-        const choices = generateChoices(w);
-        questions.push({
-            type:'en-ja',
-            word:w,
-            question:w.english,
-            answer:w.japanese,
-            choices
-        });
+        const isJaToEn = Math.random() < 0.5;
+        if (isJaToEn) {
+            // 日→英
+            questions.push({
+                type:'ja-en',
+                word:w,
+                question:w.japanese,
+                answer:w.english
+            });
+        } else {
+            // 英→日
+            const choices = generateChoices(w);
+            questions.push({
+                type:'en-ja',
+                word:w,
+                question:w.english,
+                answer:w.japanese,
+                choices
+            });
+        }
     });
     shuffleArray(questions);
     const totalQuestionsEl = document.getElementById('totalQuestions');
