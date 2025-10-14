@@ -1119,6 +1119,14 @@ function rebuildQuestionArea() {
 
 function globalKeyHandler(e) {
     if (e.key === 'Enter') {
+        // Enterキーが設定画面の入力フィールドで押された場合は無視
+        const activeElement = document.activeElement;
+        if (activeElement === rangeStartInput || 
+            activeElement === rangeEndInput || 
+            activeElement === batchSizeInput) {
+            return;
+        }
+        
         const submitVisible = document.getElementById('submitBtn') && !document.getElementById('submitBtn').classList.contains('hidden');
         const nextVisible = document.getElementById('nextBtn') && !document.getElementById('nextBtn').classList.contains('hidden');
         if (submitVisible) {
