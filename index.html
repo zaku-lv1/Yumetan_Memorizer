@@ -806,14 +806,20 @@ viewIncorrectBtn.addEventListener('click', () => {
             <div style="background:#fff; padding:30px; border-radius:15px; max-width:600px; width:90%;">
                 <h2 style="color:#e74c3c; margin-bottom:20px;">間違えた問題一覧</h2>
                 ${incorrectListHtml}
-                <button onclick="this.parentElement.parentElement.remove()" 
+                <button id="closeModalBtn"
                     style="margin-top:20px; background:#667eea; color:#fff; padding:12px 30px; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
                     閉じる
                 </button>
             </div>
         `;
         document.body.appendChild(modal);
-        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+        
+        // Add event listeners after appending to DOM
+        const closeBtn = modal.querySelector('#closeModalBtn');
+        closeBtn.addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { 
+            if (e.target === modal) modal.remove(); 
+        });
     }
 });
 
@@ -1248,11 +1254,14 @@ function showResult() {
     // 間違えた問題だけを復習するボタンのハンドラ
     if (incorrectAnswers.length > 0) {
         document.getElementById('retryIncorrectBtn').onclick = () => {
-            // 間違えた問題から単語を抽出してactiveWordsを設定
-            const incorrectWordNumbers = new Set(incorrectAnswers.map(item => item.word.number));
-            activeWords = Array.from(incorrectWordNumbers).map(num => 
-                wordData.find(w => w.number === num)
-            ).filter(w => w !== undefined);
+            // 間違えた問題から単語を抽出してactiveWordsを設定（重複を除く）
+            const seen = new Map();
+            incorrectAnswers.forEach(item => {
+                if (!seen.has(item.word.number)) {
+                    seen.set(item.word.number, item.word);
+                }
+            });
+            activeWords = Array.from(seen.values());
             
             currentQuestionIndex = 0;
             correctCount = 0;
