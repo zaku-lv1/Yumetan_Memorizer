@@ -291,6 +291,9 @@
         <div style="margin-top: 12px;">
             <button class="btn" id="reviewBtn" style="width: 100%; background: #e74c3c;">間違えた問題を復習</button>
         </div>
+        <div style="margin-top: 8px;">
+            <button class="btn" id="viewIncorrectBtn" style="width: 100%; background: #f39c12;">間違えた問題を見る</button>
+        </div>
     </div>
 
     <div id="questionArea" class="hidden">
@@ -572,6 +575,7 @@ const batchSizeInput = document.getElementById('batchSize');
 const startBtn = document.getElementById('startBtn');
 const resetBtn = document.getElementById('resetBtn');
 const reviewBtn = document.getElementById('reviewBtn');
+const viewIncorrectBtn = document.getElementById('viewIncorrectBtn');
 const submitBtn = document.getElementById('submitBtn');
 const nextBtn = document.getElementById('nextBtn');
 const showAnswerBtn = document.getElementById('showAnswerBtn');
@@ -696,6 +700,12 @@ startBtn.addEventListener('click', () => {
     incorrectCount = 0;
     incorrectAnswers = [];
     updateStats();
+    
+    // Fix: Rebuild question area if it was replaced by results
+    if (!document.getElementById('questionType')) {
+        rebuildQuestionArea();
+    }
+    
     generateQuestions();
     displayQuestion();
     settingsPanel.classList.add('hidden');
@@ -725,12 +735,86 @@ reviewBtn.addEventListener('click', () => {
     incorrectCount = 0;
     incorrectAnswers = [];
     updateStats();
+    
+    // Fix: Rebuild question area if it was replaced by results
+    if (!document.getElementById('questionType')) {
+        rebuildQuestionArea();
+    }
+    
     generateQuestions();
     displayQuestion();
     settingsPanel.classList.add('hidden');
     questionArea.classList.remove('hidden');
     statsPanel.classList.remove('hidden');
     quizStarted = true;
+});
+
+viewIncorrectBtn.addEventListener('click', () => {
+    const incorrectWords = getIncorrectWords();
+    if (incorrectWords.length === 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ 
+                icon:'info', 
+                title:'間違えた問題がありません', 
+                text:'まだ間違えた問題がないか、全ての問題の正答率が80%以上です。'
+            });
+        } else {
+            alert('間違えた問題がありません\n\nまだ間違えた問題がないか、全ての問題の正答率が80%以上です。');
+        }
+        return;
+    }
+    
+    // Display incorrect words with stats
+    let incorrectListHtml = '<div style="max-height:400px; overflow-y:auto;">';
+    incorrectListHtml += '<div style="display:grid; gap:12px;">';
+    
+    incorrectWords.forEach(word => {
+        const accuracy = getAccuracy(word.number);
+        const stats = wordStats[word.number];
+        const color = accuracy >= 80 ? '#27ae60' : accuracy >= 50 ? '#f39c12' : '#e74c3c';
+        incorrectListHtml += `
+            <div style="background:#fff5f5; padding:14px; border-radius:8px; border-left:4px solid ${color};">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-weight:600; color:#333;">No.${word.number} ${word.english}</span>
+                    <span style="background:${color}; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.85em;">${accuracy}%</span>
+                </div>
+                <div style="margin-bottom:4px;">
+                    <span style="font-weight:600; color:#555;">日本語:</span> ${word.japanese}
+                </div>
+                <div style="color:#666; font-size:0.85em;">
+                    正解: ${stats.correct}回 / 不正解: ${stats.incorrect}回
+                </div>
+            </div>
+        `;
+    });
+    
+    incorrectListHtml += '</div></div>';
+    
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'warning',
+            title: '間違えた問題一覧',
+            html: incorrectListHtml,
+            width: '600px',
+            confirmButtonText: '閉じる'
+        });
+    } else {
+        // Fallback: Create a modal-like display
+        const modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:1000;';
+        modal.innerHTML = `
+            <div style="background:#fff; padding:30px; border-radius:15px; max-width:600px; width:90%;">
+                <h2 style="color:#e74c3c; margin-bottom:20px;">間違えた問題一覧</h2>
+                ${incorrectListHtml}
+                <button onclick="this.parentElement.parentElement.remove()" 
+                    style="margin-top:20px; background:#667eea; color:#fff; padding:12px 30px; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
+                    閉じる
+                </button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    }
 });
 
 resetBtn.addEventListener('click', () => {
@@ -1100,6 +1184,18 @@ function showResult() {
         </button>
     `;
     
+    // 間違えた問題だけを復習するボタン（間違えた問題がある場合のみ表示）
+    if (incorrectAnswers.length > 0) {
+        buttonsHtml += `
+            <button id="retryIncorrectBtn"
+                style="background:#e74c3c; color:#fff; padding:15px 40px;
+                       border:none; border-radius:10px; font-size:1.1em;
+                       font-weight:bold; cursor:pointer; margin-right:10px;">
+                間違えた問題だけ復習
+            </button>
+        `;
+    }
+    
     if (hasMoreWords) {
         buttonsHtml += `
             <button id="continueBtn"
@@ -1148,6 +1244,26 @@ function showResult() {
         generateQuestions();
         displayQuestion();
     };
+    
+    // 間違えた問題だけを復習するボタンのハンドラ
+    if (incorrectAnswers.length > 0) {
+        document.getElementById('retryIncorrectBtn').onclick = () => {
+            // 間違えた問題から単語を抽出してactiveWordsを設定
+            const incorrectWordNumbers = new Set(incorrectAnswers.map(item => item.word.number));
+            activeWords = Array.from(incorrectWordNumbers).map(num => 
+                wordData.find(w => w.number === num)
+            ).filter(w => w !== undefined);
+            
+            currentQuestionIndex = 0;
+            correctCount = 0;
+            incorrectCount = 0;
+            incorrectAnswers = [];
+            updateStats();
+            rebuildQuestionArea();
+            generateQuestions();
+            displayQuestion();
+        };
+    }
     
     if (hasMoreWords) {
         document.getElementById('continueBtn').onclick = () => {
