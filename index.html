@@ -669,6 +669,8 @@ let batchMode = false; // バッチモード判定
 let batchSize = 0; // バッチサイズ
 let originalRange = { start: null, end: null }; // 元の範囲
 let usedWords = []; // 使用済み単語
+let isRetryMode = false; // やり直しモード判定（間違えた問題の復習や同じ範囲でもう一度）
+let originalTotalQuestions = 0; // 最初に指定された範囲の問題数
 
 const settingsPanel = document.getElementById('settingsPanel');
 const questionArea = document.getElementById('questionArea');
@@ -775,6 +777,7 @@ function sanitizeRange() {
 
 startBtn.addEventListener('click', () => {
     reviewMode = false;
+    isRetryMode = false; // 新規開始なのでリセット
     const { start, end } = sanitizeRange();
     const allWords = (start === null && end === null)
         ? [...wordData]
@@ -811,6 +814,7 @@ startBtn.addEventListener('click', () => {
     }
     
     generateQuestions();
+    originalTotalQuestions = questions.length; // 最初の問題数を保存
     displayQuestion();
     settingsPanel.classList.add('hidden');
     questionArea.classList.remove('hidden');
@@ -833,6 +837,7 @@ reviewBtn.addEventListener('click', () => {
         return;
     }
     reviewMode = true;
+    isRetryMode = true; // 復習モードはやり直しモード
     activeWords = incorrectWords;
     currentQuestionIndex = 0;
     correctCount = 0;
@@ -846,6 +851,8 @@ reviewBtn.addEventListener('click', () => {
     }
     
     generateQuestions();
+    // 復習モードでは問題数をカウントに入れない
+    // originalTotalQuestionsは変更しない
     displayQuestion();
     settingsPanel.classList.add('hidden');
     questionArea.classList.remove('hidden');
@@ -962,6 +969,8 @@ function hardReset() {
     batchSize = 0;
     originalRange = { start: null, end: null };
     usedWords = [];
+    isRetryMode = false;
+    originalTotalQuestions = 0;
     updateStats();
     questionArea.classList.add('hidden');
     statsPanel.classList.add('hidden');
@@ -1063,7 +1072,9 @@ function displayQuestion() {
     document.getElementById('questionType').textContent =
         q.type === 'ja-en' ? '日→英 (スペル)' : '英→日 (選択)';
     document.getElementById('currentQuestion').textContent = currentQuestionIndex + 1;
-    document.getElementById('totalQuestions').textContent = questions.length;
+    // やり直しモードの場合は元の問題数を表示、そうでない場合は現在の問題数
+    const displayTotal = isRetryMode ? originalTotalQuestions : questions.length;
+    document.getElementById('totalQuestions').textContent = displayTotal;
     document.getElementById('wordNumber').textContent = q.word.number;
     document.getElementById('questionText').textContent = q.question;
 
@@ -1345,6 +1356,7 @@ function showResult() {
     `;
     
     document.getElementById('retryBtn').onclick = () => {
+        isRetryMode = true; // 同じ範囲でやり直しなのでやり直しモード
         currentQuestionIndex = 0;
         correctCount = 0;
         incorrectCount = 0;
@@ -1358,6 +1370,7 @@ function showResult() {
     // 間違えた問題だけを復習するボタンのハンドラ
     if (incorrectAnswers.length > 0) {
         document.getElementById('retryIncorrectBtn').onclick = () => {
+            isRetryMode = true; // 間違えた問題だけの復習なのでやり直しモード
             // 間違えた問題から単語を抽出してactiveWordsを設定（重複を除く）
             const seen = new Map();
             incorrectAnswers.forEach(item => {
@@ -1380,6 +1393,8 @@ function showResult() {
     
     if (hasMoreWords) {
         document.getElementById('continueBtn').onclick = () => {
+            // 次のバッチへ進むのはやり直しではない
+            isRetryMode = false;
             // 次のバッチを選択
             activeWords = selectNextBatch(allWords, usedWords);
             currentQuestionIndex = 0;
@@ -1389,6 +1404,7 @@ function showResult() {
             updateStats();
             rebuildQuestionArea();
             generateQuestions();
+            originalTotalQuestions = questions.length; // 新しいバッチの問題数を保存
             displayQuestion();
         };
     }
