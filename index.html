@@ -999,6 +999,11 @@ function updateStats() {
     document.getElementById('incorrectCount').textContent = incorrectCount;
 }
 
+function findDuplicateMeanings(word) {
+    // Find other words in activeWords with the same Japanese meaning
+    return activeWords.filter(w => w.number !== word.number && w.japanese === word.japanese);
+}
+
 function generateQuestions() {
     questions = [];
     // 日→英
@@ -1030,15 +1035,16 @@ function generateQuestions() {
 
 function generateChoices(correctWord) {
     const choices = [correctWord.japanese];
-    const others = activeWords.filter(w => w.number !== correctWord.number);
+    // Filter out words with the same Japanese meaning as the correct answer
+    const others = activeWords.filter(w => w.number !== correctWord.number && w.japanese !== correctWord.japanese);
     const shuffled = [...others];
     shuffleArray(shuffled);
     for (let i=0; i<shuffled.length && choices.length<4; i++) {
         if (!choices.includes(shuffled[i].japanese)) choices.push(shuffled[i].japanese);
     }
-    // If not enough choices from activeWords, use wordData
+    // If not enough choices from activeWords, use wordData (also excluding same meanings)
     if (choices.length < 4) {
-        const allOthers = wordData.filter(w => w.number !== correctWord.number && !choices.includes(w.japanese));
+        const allOthers = wordData.filter(w => w.number !== correctWord.number && w.japanese !== correctWord.japanese && !choices.includes(w.japanese));
         shuffleArray(allOthers);
         for (let i=0; i<allOthers.length && choices.length<4; i++) {
             choices.push(allOthers[i].japanese);
@@ -1076,7 +1082,16 @@ function displayQuestion() {
     const displayTotal = isRetryMode ? originalTotalQuestions : questions.length;
     document.getElementById('totalQuestions').textContent = displayTotal;
     document.getElementById('wordNumber').textContent = q.word.number;
-    document.getElementById('questionText').textContent = q.question;
+    
+    // Check if there are duplicate meanings in the active range
+    const duplicates = findDuplicateMeanings(q.word);
+    let questionText = q.question;
+    if (duplicates.length > 0) {
+        // Add first letter hint in parentheses
+        const firstLetter = q.answer.charAt(0).toLowerCase();
+        questionText = `${q.question} (${firstLetter})`;
+    }
+    document.getElementById('questionText').textContent = questionText;
 
     const feedback = document.getElementById('feedback');
     feedback.className = 'feedback';
