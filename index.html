@@ -1059,6 +1059,17 @@ function shuffleArray(arr) {
     }
 }
 
+// 同じ日本語の意味を持つ単語が出題範囲内に複数あるかチェック
+function hasDuplicateJapaneseMeaning(japanese) {
+    const duplicates = activeWords.filter(w => w.japanese === japanese);
+    return duplicates.length > 1;
+}
+
+// 同じ日本語の意味を持つ単語のリストを取得
+function getWordsWithSameMeaning(japanese) {
+    return activeWords.filter(w => w.japanese === japanese);
+}
+
 function displayQuestion() {
     if (currentQuestionIndex >= questions.length) {
         showResult();
@@ -1076,7 +1087,15 @@ function displayQuestion() {
     const displayTotal = isRetryMode ? originalTotalQuestions : questions.length;
     document.getElementById('totalQuestions').textContent = displayTotal;
     document.getElementById('wordNumber').textContent = q.word.number;
-    document.getElementById('questionText').textContent = q.question;
+    
+    // 日→英の問題で、同じ日本語の意味を持つ単語が複数ある場合、頭文字をヒントとして表示
+    let questionTextContent = q.question;
+    if (q.type === 'ja-en' && hasDuplicateJapaneseMeaning(q.word.japanese)) {
+        const duplicateWords = getWordsWithSameMeaning(q.word.japanese);
+        const initials = duplicateWords.map(w => w.english[0].toUpperCase()).sort().join(', ');
+        questionTextContent = `${q.question} (頭文字: ${initials})`;
+    }
+    document.getElementById('questionText').textContent = questionTextContent;
 
     const feedback = document.getElementById('feedback');
     feedback.className = 'feedback';
