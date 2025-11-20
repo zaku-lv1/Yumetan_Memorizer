@@ -1086,8 +1086,12 @@ function displayQuestion() {
     // Check if there are duplicate meanings in the active range
     // Only add first letter hint for ja-en (Japanese → English) questions
     const duplicates = findDuplicateMeanings(q.word);
+    // Always show first letter hints for specific confusing words
+    const alwaysShowHintWords = ['notice', 'realize', 'perceive'];
+    const shouldShowHint = (duplicates.length > 0 || alwaysShowHintWords.includes(q.answer.toLowerCase())) && q.type === 'ja-en';
+    
     let questionText = q.question;
-    if (duplicates.length > 0 && q.type === 'ja-en') {
+    if (shouldShowHint) {
         // Add first letter hint in parentheses for typing questions only
         const firstLetter = q.answer.charAt(0).toLowerCase();
         questionText = `${q.question} (${firstLetter})`;
