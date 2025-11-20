@@ -1084,10 +1084,11 @@ function displayQuestion() {
     document.getElementById('wordNumber').textContent = q.word.number;
     
     // Check if there are duplicate meanings in the active range
+    // Only add first letter hint for ja-en (Japanese → English) questions
     const duplicates = findDuplicateMeanings(q.word);
     let questionText = q.question;
-    if (duplicates.length > 0) {
-        // Add first letter hint in parentheses
+    if (duplicates.length > 0 && q.type === 'ja-en') {
+        // Add first letter hint in parentheses for typing questions only
         const firstLetter = q.answer.charAt(0).toLowerCase();
         questionText = `${q.question} (${firstLetter})`;
     }
