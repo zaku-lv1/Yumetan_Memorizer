@@ -138,7 +138,7 @@
             font-size:1.05em;
             border:2px solid #e0e0e0;
             border-radius:10px;
-            transition:border-color .3s;
+            transition:border-color:.3s;
         }
         input#answerInput:focus { outline:none; border-color:#667eea; }
         .choices {
@@ -204,7 +204,8 @@
             border:2px solid #c3e6cb;
             display:block;
         }
-        .feedback.incorrect, .feedback.revealed {
+        .feedback.incorrect,
+        .feedback.revealed {
             background:#f8d7da;
             color:#721c24;
             border:2px solid #f5c6cb;
@@ -366,7 +367,7 @@ const wordData = [
     { number:669, english:"apologize", japanese:"謝る" },
     { number:670, english:"debate", japanese:"〜を論争する" },
     { number:671, english:"admit", japanese:"〜を認める" },
-    { number:672, english:"propose", japanese:"〜提案する" },
+    { number:672, english:"propose", japanese:"〜を提案する" },
     { number:673, english:"refrain", japanese:"慎む" },
     { number:674, english:"remind", japanese:"〜に思い出させる" },
     { number:675, english:"respond", japanese:"返事をする" },
@@ -458,7 +459,7 @@ const wordData = [
     { number:761, english:"review", japanese:"〜を再検討する" },
     { number:762, english:"discuss", japanese:"〜について話し合う" },
     { number:763, english:"quote", japanese:"〜を引用する" },
-    { number:764, english:"launch", japanese:"を始める" },
+    { number:764, english:"launch", japanese:"〜を始める" },
     { number:765, english:"eliminate", japanese:"〜を除く" },
     { number:766, english:"occur", japanese:"起こる" },
     { number:767, english:"reinforce", japanese:"〜を補強する" },
@@ -470,7 +471,7 @@ const wordData = [
     { number:773, english:"suggest", japanese:"〜を提案する" },
     { number:774, english:"pretend", japanese:"〜を装う" },
     { number:775, english:"select", japanese:"〜を選び出す" },
-    { number:776, english:"endure", japanese:"に耐える" },
+    { number:776, english:"endure", japanese:"〜に耐える" },
     { number:777, english:"publish", japanese:"〜を出版する" },
     { number:778, english:"insist", japanese:"強く主張する" },
     { number:779, english:"illustrate", japanese:"〜を例示する" },
@@ -651,6 +652,58 @@ const wordData = [
     { number:948, english:"expose", japanese:"〜をさらす" },
     { number:949, english:"stick", japanese:"〜を突き刺す" },
     { number:950, english:"arise", japanese:"起こる" },
+
+    // 追加: 951〜1000
+    { number:951, english:"dare", japanese:"あえて〜する" },
+    { number:952, english:"tear", japanese:"〜を引き裂く" },
+    { number:953, english:"reform", japanese:"〜を改善する" },
+    { number:954, english:"arrest", japanese:"〜を逮捕する" },
+    { number:955, english:"draw", japanese:"〜を引く" },
+    { number:956, english:"matter", japanese:"重要である" },
+    { number:957, english:"fulfill", japanese:"〜を果たす" },
+    { number:958, english:"combine", japanese:"〜を結合させる" },
+    { number:959, english:"polish", japanese:"〜を磨く" },
+    { number:960, english:"sweep", japanese:"〜を掃く" },
+    { number:961, english:"recall", japanese:"〜を思い出す" },
+    { number:962, english:"resist", japanese:"〜に抵抗する" },
+    { number:963, english:"commit", japanese:"〜を犯す" },
+    { number:964, english:"settle", japanese:"〜を確定する" },
+    { number:965, english:"struggle", japanese:"もがく" },
+    { number:966, english:"gaze", japanese:"じっと見る" },
+    { number:967, english:"imply", japanese:"〜を暗示する" },
+    { number:968, english:"admire", japanese:"〜を称賛する" },
+    { number:969, english:"inspire", japanese:"〜を鼓舞する" },
+    { number:970, english:"remark", japanese:"〜と言う" },
+    { number:971, english:"bury", japanese:"〜を埋める" },
+    { number:972, english:"pray", japanese:"祈る" },
+    { number:973, english:"esteem", japanese:"〜を重んじる" },
+    { number:974, english:"decline", japanese:"〜を断る" },
+    { number:975, english:"receive", japanese:"〜を受け取る" },
+    { number:976, english:"prohibit", japanese:"〜を禁止する" },
+    { number:977, english:"awake", japanese:"〜を起こす" },
+    { number:978, english:"attend", japanese:"〜に出席する" },
+    { number:979, english:"rob", japanese:"〜から盗む" },
+    { number:980, english:"tend", japanese:"〜しがちである" },
+    { number:981, english:"innocent", japanese:"無邪気な" },
+    { number:982, english:"guilty", japanese:"有罪の" },
+    { number:983, english:"legal", japanese:"法律上の" },
+    { number:984, english:"medium", japanese:"中間の" },
+    { number:985, english:"radical", japanese:"根本的な" },
+    { number:986, english:"intensive", japanese:"激しい" },
+    { number:987, english:"mutual", japanese:"相互の" },
+    { number:988, english:"stable", japanese:"安定した" },
+    { number:989, english:"reasonable", japanese:"妥当な" },
+    { number:990, english:"grateful", japanese:"感謝している" },
+    { number:991, english:"harmful", japanese:"有害な" },
+    { number:992, english:"contemporary", japanese:"現代の" },
+    { number:993, english:"neutral", japanese:"中立の" },
+    { number:994, english:"regular", japanese:"規則正しい" },
+    { number:995, english:"eternal", japanese:"永遠の" },
+    { number:996, english:"parallel", japanese:"平行な" },
+    { number:997, english:"voluntary", japanese:"進んで行う" },
+    { number:998, english:"moral", japanese:"道徳の" },
+    { number:999, english:"contrary", japanese:"反対の" },
+    { number:1000, english:"infinite", japanese:"無限の" },
 ];
 
 let activeWords = [];
@@ -1256,7 +1309,6 @@ function showResult() {
     let incorrectAnswersHtml = '';
     if (incorrectAnswers.length > 0) {
         incorrectAnswersHtml = '<div style="margin-top:30px; max-height:400px; overflow-y:auto;">';
-        incorrectAnswersHtml += '<h3 style="color:#e74c3c; font-size:1.1em; margin-bottom:15px;">間違えた問題</h3>';
         incorrectAnswersHtml += '<div style="display:grid; gap:12px;">';
         
         incorrectAnswers.forEach((item, index) => {
